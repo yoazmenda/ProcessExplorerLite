@@ -8,9 +8,8 @@
 #include <string.h>
 #include <ncurses.h>
 #include <unistd.h>
-
-/* Constants */
-#define REFRESH_INTERVAL 1  /* Refresh every 1 second */
+#include <sys/select.h>
+#include <sys/time.h>
 
 /* Function prototypes */
 void init_ui(void);
@@ -30,7 +29,6 @@ void init_ui(void) {
     cbreak();               /* Disable line buffering */
     noecho();               /* Don't echo typed characters */
     keypad(stdscr, TRUE);   /* Enable function keys */
-    nodelay(stdscr, TRUE);  /* Make getch() non-blocking */
     curs_set(0);            /* Hide cursor */
 
     /* Enable colors if terminal supports them */
@@ -108,9 +106,22 @@ int main(void) {
     /* Initialize UI */
     init_ui();
 
+    fd_set readfds;
+    struct timeval timeout; 
+    int select_result; 
+   
     /* Main loop */
     while (running) {
-        /* Clear screen */
+	timeout.tv_sec = 1; // one second
+	timeout.tv_usec = 0; // zero microseconds 
+	
+	/* Clear the file descriptor set */
+	FD_ZERO(&readfds);
+
+	/* Insert our only file descriptor of interest: STDIN */
+	FD_SET(STDIN_FILENO, &readfds);
+
+	/* Clear screen */
         clear();
 
         /* Get terminal dimensions */
@@ -129,19 +140,20 @@ int main(void) {
         mvprintw(6, 2, "TODO: Add process listing functionality here");
         mvprintw(8, 2, "Terminal size: %d rows x %d cols", max_y, max_x);
 
-        /* Refresh screen */
-        refresh();
-
-        /* Handle input (non-blocking) */
-        ch = getch();
-        if (ch != ERR) {
-            handle_input(ch);
-        }
-
-        /* Sleep before next refresh */
-        sleep(REFRESH_INTERVAL);
+        
+	refresh(); 
+	/* Handle input (non-blocking) */
+	select_result = select(1, &readfds,
+                  NULL,
+		  NULL,                 
+                  &timeout);
+	if (select_result < 0) {
+	    // TODO handle error when reading from SDTIN
+	} else if (select_result > 0) {
+	    ch = getch();
+	    handle_input(ch);
+	}
     }
-
     /* Clean up */
     cleanup_ui();
 
