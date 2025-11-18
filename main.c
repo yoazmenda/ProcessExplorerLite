@@ -3,6 +3,9 @@
  * A simple TUI application similar to 'top' for monitoring system processes
  */
 
+/* Feature test macro for POSIX.1-2008 (needed for sigaction, etc.) */
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -225,12 +228,17 @@ void handle_input(int ch) {
 int main(void) {
     int ch;
     int max_y, max_x;
+    struct sigaction sa;
 
     /*
-     * CRITICAL: Register signal handlers BEFORE initializing UI
-     * This ensures signals are caught from the very beginning
+     * CRITICAL: Register signal handler BEFORE initializing UI
+     * Use sigaction() instead of signal() for reliable, persistent handler
+     * signal() has inconsistent behavior - may reset after first call (old SysV)
      */
-    signal(SIGWINCH, handle_sigwinch);
+    sa.sa_handler = handle_sigwinch;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;  /* Automatically restart interrupted system calls */
+    sigaction(SIGWINCH, &sa, NULL);
 
     /* Initialize UI */
     init_ui();
