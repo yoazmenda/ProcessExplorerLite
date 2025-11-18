@@ -3,12 +3,6 @@
  * A simple TUI application similar to 'top' for monitoring system processes
  */
 
-/*
- * This tells the compiler to enable POSIX features (Unix standard functions).
- * Without this, functions like sigaction() won't be available in strict C99 mode.
- */
-#define _POSIX_C_SOURCE 200809L
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,10 +47,13 @@ static int last_errno = 0;                /* Last error number from system calls
  * IMPORTANT: Signal handlers have strict rules!
  * We can ONLY set simple flags here. All the real work (updating the display)
  * happens in the main loop where it's safe to call ncurses functions.
+ *
+ * NOTE: We re-register the handler because signal() has a bug on some systems
+ * where it resets to default after being called once. This is a workaround.
  */
 void handle_sigwinch(int sig) {
-    (void)sig;  /* We don't need the signal number, so mark it unused */
-    resize_pending = 1;  /* Set flag so main loop knows to handle resize */
+    signal(SIGWINCH, handle_sigwinch);  /* Re-register immediately! */
+    resize_pending = 1;
 }
 
 /*
@@ -223,21 +220,15 @@ void handle_input(int ch) {
  */
 int main(void) {
     int ch;
-    struct sigaction sa;
 
     /*
      * Step 1: Tell the OS to call handle_sigwinch() when terminal is resized
      * SIGWINCH = "SIGnal WINdow CHange"
      *
-     * WHY sigaction() instead of signal()?
-     * We tested: signal() only works ONCE on this system, then stops catching resizes.
-     * This is old SysV behavior where signal handlers reset after being called.
-     * sigaction() guarantees the handler stays registered - works for ALL resizes.
+     * Testing: signal() with re-register workaround
+     * The handler re-registers itself to work around signal() reset behavior.
      */
-    sa.sa_handler = handle_sigwinch;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;  /* No special flags needed */
-    sigaction(SIGWINCH, &sa, NULL);
+    signal(SIGWINCH, handle_sigwinch);
 
     /* Step 2: Initialize ncurses (the text UI library) */
     init_ui();
