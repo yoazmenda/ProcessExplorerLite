@@ -31,10 +31,17 @@ This is an **interview preparation project** designed for hands-on learning of l
 
 ## 📚 Learning Journey
 
-### Session 2 - 2025-11-18 - Signal Handling & Window Resize
-**Focus:** SIGWINCH signal handling for responsive terminal resizing
-**Status:** 🔄 In Progress
-[Detailed notes](docs/sessions/session-02.md) (coming soon)
+### Session 2 - 2025-11-18 - Signal Handling Deep Dive
+**Focus:** Understanding signals, async-signal-safety, and EINTR
+**Key Concepts Learned:**
+- Signal delivery mechanisms (during syscall vs user code)
+- Async-signal-safety and reentrancy issues
+- EINTR error handling for interrupted syscalls
+- Why signal handlers should be minimal (just set flags)
+- Timer interrupts and preemptive multitasking
+
+**Status:** 🎓 Theory complete, implementation pending
+[Detailed notes](docs/sessions/session-02.md)
 
 ### Session 1 - 2025-11-17 - Responsive Input with select()
 **Problem:** User input had 1-second delay due to `sleep()` in main loop
