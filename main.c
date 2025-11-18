@@ -28,7 +28,6 @@ void draw_content(void);
 void draw_debug_panel(void);
 void handle_input(int ch);
 void handle_resize(void);
-int wait_for_input(fd_set *readfds, struct timeval *timeout);
 
 /* Application state */
 int running = 1;          /* Set to 0 to quit the program */
@@ -220,116 +219,103 @@ void handle_input(int ch) {
 }
 
 /*
- * Wait for user to press a key (with 1 second timeout)
- *
- * We use select() which is like saying "wait for input, but don't wait forever".
- * This lets the screen auto-refresh every second even if you don't press anything.
- *
- * Returns:
- *   1  = User pressed a key (input available)
- *   0  = Timeout (no key pressed in 1 second, just continue)
- *  -1  = Error (something went wrong, should exit program)
- */
-int wait_for_input(fd_set *readfds, struct timeval *timeout) {
-    int result = select(STDIN_FILENO + 1, readfds, NULL, NULL, timeout);
-
-    if (result < 0) {
-        last_errno = errno;
-        if (errno == EINTR) {
-            /*
-             * EINTR = "Error INTerRupted" - a signal arrived while we were waiting.
-             * This is normal when the terminal is resized! Not a real error.
-             */
-            select_interrupt_count++;
-            return 0;  /* No input yet, continue loop */
-        }
-        /* Real error happened */
-        perror("select");
-        return -1;  /* Tell main loop to exit */
-    } else if (result > 0) {
-        /* User pressed a key! */
-        select_input_count++;
-        last_errno = 0;
-        return 1;  /* Input is available */
-    } else {
-        /* Timeout - 1 second passed with no keypress */
-        select_timeout_count++;
-        last_errno = 0;
-        return 0;  /* No input, loop will continue and redraw */
-    }
-}
-
-/*
  * Main application loop
  */
 int main(void) {
     int ch;
-    int max_y, max_x;  /* Queried after resize - needed for ncurses state sync */
     struct sigaction sa;
 
     /*
      * Step 1: Tell the OS to call handle_sigwinch() when terminal is resized
+     * SIGWINCH = "SIGnal WINdow CHange"
      *
-     * We use sigaction() instead of signal() because signal() has a bug on some
-     * systems where it stops working after being called once. sigaction() always works.
+     * WHY sigaction() instead of signal()?
+     * We tested: signal() only works ONCE on this system, then stops catching resizes.
+     * This is old SysV behavior where signal handlers reset after being called.
+     * sigaction() guarantees the handler stays registered - works for ALL resizes.
      */
-    sa.sa_handler = handle_sigwinch;  /* Function to call on resize */
-    sigemptyset(&sa.sa_mask);         /* Don't block other signals */
-    sa.sa_flags = SA_RESTART;         /* Auto-restart system calls if interrupted */
-    sigaction(SIGWINCH, &sa, NULL);   /* Register the handler with OS */
+    sa.sa_handler = handle_sigwinch;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;  /* No special flags needed */
+    sigaction(SIGWINCH, &sa, NULL);
 
     /* Step 2: Initialize ncurses (the text UI library) */
     init_ui();
 
-    /* Variables for waiting on user input */
-    fd_set readfds;         /* File descriptor set (tells select() what to monitor) */
-    struct timeval timeout; /* How long to wait */
-    int select_result;      /* Result from wait_for_input() */
+    /* Variables for waiting on user input with select() */
+    fd_set readfds;         /* Set of file descriptors to monitor (just keyboard) */
+    struct timeval timeout; /* How long to wait before timeout */
+    int select_result;      /* Return value from select() */
 
     /*
-     * Step 3: Main loop - runs continuously until user presses 'q'
+     * Step 3: Main loop - runs until user presses 'q'
      *
-     * The loop does 4 things:
-     * 1. Check if terminal was resized, update if needed
-     * 2. Draw the UI
-     * 3. Wait for user input (with 1 second timeout for auto-refresh)
-     * 4. If user pressed a key, handle it
+     * Flow:
+     * 1. Check if terminal was resized → update ncurses if needed
+     * 2. Draw the entire UI
+     * 3. Wait for keyboard input (or timeout after 1 second)
+     * 4. Process any key that was pressed
      */
     while (running) {
         /* 1. Handle resize if it happened */
         if (resize_pending) {
             resize_pending = 0;  /* Clear the flag */
-            handle_resize();     /* Tell ncurses about new terminal size */
+            handle_resize();     /* Tell ncurses about new size */
         }
 
-        /* Get current terminal size (needed after resize) */
-        getmaxyx(stdscr, max_y, max_x);
-        (void)max_y; (void)max_x;  /* Mark as used to avoid compiler warnings */
-
-        /* 2. Draw everything */
+        /* 2. Draw the UI */
         clear();            /* Clear old content */
-        draw_header();      /* Draw top bar */
-        draw_content();     /* Draw main content */
-        draw_debug_panel(); /* Draw debug info (if enabled) */
-        draw_footer();      /* Draw bottom bar */
-        refresh();          /* Actually display everything */
+        draw_header();      /* Top bar */
+        draw_content();     /* Main content area */
+        draw_debug_panel(); /* Debug info (if enabled with 'd') */
+        draw_footer();      /* Bottom bar */
+        refresh();          /* Actually show everything on screen */
 
-        /* 3. Wait for user input */
+        /*
+         * 3. Wait for keyboard input with 1 second timeout
+         * select() = "wait for something to happen, but don't wait forever"
+         */
         timeout.tv_sec = 1;               /* Wait up to 1 second */
         timeout.tv_usec = 0;              /* Plus 0 microseconds */
-        FD_ZERO(&readfds);                /* Clear the monitor set */
-        FD_SET(STDIN_FILENO, &readfds);   /* Monitor keyboard (stdin) */
+        FD_ZERO(&readfds);                /* Clear the set */
+        FD_SET(STDIN_FILENO, &readfds);   /* Monitor keyboard (stdin = standard input) */
 
-        select_result = wait_for_input(&readfds, &timeout);
+        select_result = select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
 
-        /* 4. Handle user input */
+        /*
+         * 4. Check what happened with select()
+         */
         if (select_result < 0) {
-            break;  /* Error occurred - exit program */
+            /* select() returned error (-1) */
+            last_errno = errno;
+
+            if (errno == EINTR) {
+                /*
+                 * EINTR = "Error: INTerRupted"
+                 * A signal (like SIGWINCH from resize) interrupted select().
+                 * This is NORMAL, not a real error! Just continue the loop.
+                 */
+                select_interrupt_count++;
+                continue;  /* Go back to top of loop to check resize_pending */
+            }
+
+            /* Real error (not EINTR) - something is wrong */
+            perror("select");
+            break;  /* Exit the program */
+
         } else if (select_result > 0) {
-            ch = getch();       /* Read the key that was pressed */
-            handle_input(ch);   /* Process it (might quit if 'q' was pressed) */
+            /* User pressed a key! */
+            select_input_count++;
+            last_errno = 0;
+            ch = getch();       /* Read which key was pressed */
+            handle_input(ch);   /* Process it (might set running=0 if 'q') */
+
+        } else {
+            /* select_result == 0: Timeout after 1 second with no input */
+            select_timeout_count++;
+            last_errno = 0;
+            /* Loop continues and screen refreshes automatically */
         }
-        /* If select_result == 0, timeout occurred - loop continues and redraws */
     }
 
     /* Clean up */
