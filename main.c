@@ -106,24 +106,29 @@ int is_numeric(char* str) {
 
 
 void draw_content(void) {
-    int max_y, max_x;
-    getmaxyx(stdscr, max_y, max_x);
-    DIR *dir_stream = opendir("/proc");
-    struct dirent *dirent_ptr;
-    int i = 3; // not override program header
-    last_errno = errno;
-    while ((dirent_ptr = readdir(dir_stream)) != NULL) {
-	if (errno != last_errno) {
-		perror(strerror(errno));
-		running = 0;
-		break;
-	}
-	if (is_numeric(dirent_ptr->d_name) == 1) {
-	    // it's actually a directory like /prod/D where D is a pid
-            mvprintw(i, 0, dirent_ptr->d_name);
+    // int max_y, max_x;
+    // getmaxyx(stdscr, max_y, max_x);
+    DIR *process_dir_stream = opendir("/proc");
+    struct dirent *process_direntry;
+    int i = 2; // not override program header
+    while ((process_direntry = readdir(process_dir_stream)) != NULL) {
+	if (is_numeric(process_direntry->d_name)) {
+	    char task_path[256];
+	    snprintf(task_path, sizeof(task_path) + sizeof("/proc//task"), "/proc/%s/task", process_direntry->d_name);
+	    DIR *task_dir_stream = opendir(task_path);
+	    struct dirent *task_direntry;
+	    mvprintw(i, 0, "--------");
 	    i++;
+	    while ((task_direntry = readdir(task_dir_stream)) != NULL) {
+		if (is_numeric(task_direntry->d_name)) {
+                    mvprintw(i, 0, "%s", task_direntry->d_name);
+		    i++;
+		}
+	    }
+	    closedir(task_dir_stream);
 	}
     }
+    closedir(process_dir_stream);
 }
 
 void draw_debug_panel(void) {
