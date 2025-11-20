@@ -12,6 +12,10 @@
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <ctype.h>
+#include <string.h>
 
 /* ========== Global State ========== */
 
@@ -88,18 +92,38 @@ void draw_footer(void) {
     attroff(COLOR_PAIR(2));
 }
 
+int is_numeric(char* str) {
+    if (*str == '\0') return 0;
+    while (*str != '\0') {
+        int is_digit_result = isdigit((unsigned char)*str);
+        if (!is_digit_result) {
+	    return 0;
+	}
+  	str++;
+    }
+    return 1;
+}
+
+
 void draw_content(void) {
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
-
-    attron(COLOR_PAIR(3));
-    mvprintw(3, 2, "Welcome to ProcessExplorerLite!");
-    attroff(COLOR_PAIR(3));
-
-    mvprintw(5, 2, "This is a learning project for systems programming.");
-    mvprintw(6, 2, "TODO: Add process listing functionality here");
-    mvprintw(8, 2, "Terminal size: %d rows x %d cols", max_y, max_x);
-    mvprintw(9, 2, "Debug mode: %s (toggle with 'd')", debug_mode ? "ON" : "OFF");
+    DIR *dir_stream = opendir("/proc");
+    struct dirent *dirent_ptr;
+    int i = 3; // not override program header
+    last_errno = errno;
+    while ((dirent_ptr = readdir(dir_stream)) != NULL) {
+	if (errno != last_errno) {
+		perror(strerror(errno));
+		running = 0;
+		break;
+	}
+	if (is_numeric(dirent_ptr->d_name) == 1) {
+	    // it's actually a directory like /prod/D where D is a pid
+            mvprintw(i, 0, dirent_ptr->d_name);
+	    i++;
+	}
+    }
 }
 
 void draw_debug_panel(void) {
