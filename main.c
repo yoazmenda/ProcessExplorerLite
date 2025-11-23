@@ -271,54 +271,70 @@ void handle_input(int ch) {
     }
 }
 
-int wait_for_input(fd_set *readfds, struct timeval *timeout) {
-    timeout->tv_sec = 1;
-    timeout->tv_usec = 0;
-    FD_ZERO(readfds);
-    FD_SET(STDIN_FILENO, readfds);
+/* ========== Main Event Loop ========== */
 
-    return select(STDIN_FILENO + 1, readfds, NULL, NULL, timeout);
-}
-
-void process_select_result(int result) {
-    if (result < 0) {
-        last_errno = errno;
-        if (errno == EINTR) {
-            select_interrupt_count++;
-            return;
-        }
-        perror("select");
-        running = 0;
-    } else if (result > 0) {
-        select_input_count++;
-        last_errno = 0;
-        handle_input(getch());
-    } else {
-        select_timeout_count++;
-        last_errno = 0;
-    }
-}
-
-/* ========== Main ========== */
-
-int main(void) {
+/*
+ * Check for keyboard input with timeout
+ * Uses select() to wait up to 1 second for input, allowing periodic UI refresh
+ * Returns: 1 if input available, 0 if timeout, -1 on error
+ */
+int check_for_keyboard_input(void) {
     fd_set readfds;
     struct timeval timeout;
 
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    FD_ZERO(&readfds);
+    FD_SET(STDIN_FILENO, &readfds);
+
+    return select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
+}
+
+int main(void) {
     signal(SIGWINCH, handle_sigwinch);
     init_ui();
 
     /* Collect task data */
     task_count = collect_task_data(tasks, MAX_TASKS);
 
+    /* Main event loop: refresh UI every second and handle keyboard input */
     while (running) {
+        /* Handle terminal resize */
         if (resize_pending) {
             resize_pending = 0;
             handle_resize();
         }
 
+        /* Redraw the UI */
         draw_ui();
-        process_select_result(wait_for_input(&readfds, &timeout));
+
+        /* Wait for keyboard input (with 1 second timeout for periodic refresh) */
+        int input_status = check_for_keyboard_input();
+
+        if (input_status < 0) {
+            /* Error occurred */
+            last_errno = errno;
+            if (errno == EINTR) {
+                /* Interrupted by signal (e.g., SIGWINCH) - just continue */
+                select_interrupt_count++;
+                continue;
+            }
+            /* Fatal error */
+            perror("select");
+            running = 0;
+
+        } else if (input_status > 0) {
+            /* Keyboard input is available - read and handle it */
+            select_input_count++;
+            last_errno = 0;
+            int ch = getch();
+            handle_input(ch);
+
+        } else {
+            /* Timeout - no input, just continue to refresh UI */
+            select_timeout_count++;
+            last_errno = 0;
+        }
     }
 
     cleanup_ui();
