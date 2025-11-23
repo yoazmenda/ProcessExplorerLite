@@ -17,11 +17,28 @@
 #include <ctype.h>
 #include <string.h>
 
+/* ========== Data Structures ========== */
+
+typedef struct {
+    int pid;
+    int tid;
+    char command[32];
+    char state;  /* 'R' = Running, 'S' = Sleeping, 'D' = Disk sleep, 'Z' = Zombie, 'T' = Stopped */
+} TaskInfo;
+
+#define MAX_TASKS 1000
+
 /* ========== Global State ========== */
 
 int running = 1;
 int debug_mode = 0;
 volatile sig_atomic_t resize_pending = 0;
+
+/* Task list state */
+TaskInfo tasks[MAX_TASKS];
+int task_count = 0;
+int selected_index = 0;  /* Currently selected row */
+int scroll_offset = 0;   /* Top visible row */
 
 /* Debug statistics */
 static int resize_count = 0;
@@ -55,10 +72,13 @@ void init_ui(void) {
 
     if (has_colors()) {
         start_color();
-        init_pair(1, COLOR_CYAN, COLOR_BLACK);
-        init_pair(2, COLOR_GREEN, COLOR_BLACK);
-        init_pair(3, COLOR_YELLOW, COLOR_BLACK);
-        init_pair(4, COLOR_MAGENTA, COLOR_BLACK);
+        init_pair(1, COLOR_CYAN, COLOR_BLACK);    /* Header */
+        init_pair(2, COLOR_GREEN, COLOR_BLACK);   /* Footer */
+        init_pair(3, COLOR_YELLOW, COLOR_BLACK);  /* Table header */
+        init_pair(4, COLOR_MAGENTA, COLOR_BLACK); /* Debug panel */
+        init_pair(5, COLOR_BLACK, COLOR_WHITE);   /* Selected row */
+        init_pair(6, COLOR_GREEN, COLOR_BLACK);   /* Running state */
+        init_pair(7, COLOR_BLUE, COLOR_BLACK);    /* Sleeping state */
     }
 }
 
@@ -88,7 +108,7 @@ void draw_footer(void) {
     max_y = getmaxy(stdscr);
 
     attron(COLOR_PAIR(2));
-    mvprintw(max_y - 1, 0, "Keys: [q]uit | [d]ebug | [h]elp");
+    mvprintw(max_y - 1, 0, "Keys: [↑/↓]Navigate | [q]uit | [d]ebug | [h]elp");
     attroff(COLOR_PAIR(2));
 }
 
@@ -104,31 +124,111 @@ int is_numeric(char* str) {
     return 1;
 }
 
+/* ========== Mock Data Generation ========== */
+/* TODO: Replace this with actual /proc parsing */
+
+void generate_mock_data(void) {
+    const char *mock_commands[] = {
+        "systemd", "kthreadd", "bash", "vim", "firefox",
+        "chrome", "docker", "nginx", "postgres", "python3",
+        "gcc", "make", "ssh", "sshd", "cron",
+        "dbus-daemon", "NetworkManager", "pulseaudio", "Xorg", "gnome-shell"
+    };
+    const char states[] = {'R', 'S', 'S', 'S', 'D', 'S', 'S', 'S', 'S', 'S'};
+    int num_commands = sizeof(mock_commands) / sizeof(mock_commands[0]);
+
+    task_count = 0;
+
+    /* Generate mock tasks */
+    for (int i = 0; i < 50 && task_count < MAX_TASKS; i++) {
+        int pid = 100 + i * 10;
+        int num_threads = 1 + (i % 4);  /* 1-4 threads per process */
+
+        for (int t = 0; t < num_threads && task_count < MAX_TASKS; t++) {
+            tasks[task_count].pid = pid;
+            tasks[task_count].tid = pid + t;
+            snprintf(tasks[task_count].command, sizeof(tasks[task_count].command),
+                    "%s", mock_commands[i % num_commands]);
+            tasks[task_count].state = states[task_count % 10];
+            task_count++;
+        }
+    }
+}
+
+
+const char* get_state_string(char state) {
+    switch(state) {
+        case 'R': return "Running";
+        case 'S': return "Sleeping";
+        case 'D': return "Disk sleep";
+        case 'Z': return "Zombie";
+        case 'T': return "Stopped";
+        default: return "Unknown";
+    }
+}
+
+int get_state_color(char state) {
+    switch(state) {
+        case 'R': return COLOR_PAIR(6);  /* Green for running */
+        case 'S': return COLOR_PAIR(7);  /* Blue for sleeping */
+        default: return 0;
+    }
+}
 
 void draw_content(void) {
-    // int max_y, max_x;
-    // getmaxyx(stdscr, max_y, max_x);
-    DIR *process_dir_stream = opendir("/proc");
-    struct dirent *process_direntry;
-    int i = 2; // not override program header
-    while ((process_direntry = readdir(process_dir_stream)) != NULL) {
-	if (is_numeric(process_direntry->d_name)) {
-	    char task_path[256];
-	    snprintf(task_path, sizeof(task_path) + sizeof("/proc//task"), "/proc/%s/task", process_direntry->d_name);
-	    DIR *task_dir_stream = opendir(task_path);
-	    struct dirent *task_direntry;
-	    mvprintw(i, 0, "--------");
-	    i++;
-	    while ((task_direntry = readdir(task_dir_stream)) != NULL) {
-		if (is_numeric(task_direntry->d_name)) {
-                    mvprintw(i, 0, "%s", task_direntry->d_name);
-		    i++;
-		}
-	    }
-	    closedir(task_dir_stream);
-	}
+    int max_y, max_x;
+    getmaxyx(stdscr, max_y, max_x);
+
+    /* Calculate available space for task list */
+    int header_lines = 2;  /* Title + separator */
+    int footer_lines = 1;
+    int debug_lines = debug_mode ? 9 : 0;
+    int table_header_lines = 2;  /* Column headers + separator */
+
+    int available_lines = max_y - header_lines - footer_lines - debug_lines - table_header_lines;
+    int content_start_y = header_lines;
+
+    /* Draw table header */
+    attron(COLOR_PAIR(3) | A_BOLD);
+    mvprintw(content_start_y, 2, "%-8s %-8s %-20s %-12s", "PID", "TID", "Command", "State");
+    attroff(COLOR_PAIR(3) | A_BOLD);
+    mvhline(content_start_y + 1, 0, '-', max_x);
+
+    /* Draw task rows */
+    int table_start_y = content_start_y + table_header_lines;
+
+    for (int i = 0; i < available_lines && (scroll_offset + i) < task_count; i++) {
+        int task_idx = scroll_offset + i;
+        TaskInfo *task = &tasks[task_idx];
+        int row_y = table_start_y + i;
+
+        /* Highlight selected row */
+        if (task_idx == selected_index) {
+            attron(COLOR_PAIR(5) | A_BOLD);
+            mvhline(row_y, 0, ' ', max_x);  /* Fill entire row with background */
+        }
+
+        /* Draw task info */
+        mvprintw(row_y, 2, "%-8d %-8d %-20s", task->pid, task->tid, task->command);
+
+        /* Draw state with color (only if not selected, to maintain readability) */
+        if (task_idx == selected_index) {
+            mvprintw(row_y, 2 + 8 + 1 + 8 + 1 + 20 + 1, "%-12s", get_state_string(task->state));
+            attroff(COLOR_PAIR(5) | A_BOLD);
+        } else {
+            attron(get_state_color(task->state));
+            mvprintw(row_y, 2 + 8 + 1 + 8 + 1 + 20 + 1, "%-12s", get_state_string(task->state));
+            attroff(get_state_color(task->state));
+        }
     }
-    closedir(process_dir_stream);
+
+    /* Draw scroll indicator if needed */
+    if (task_count > available_lines) {
+        int indicator_y = content_start_y + 3;
+        attron(COLOR_PAIR(3));
+        mvprintw(indicator_y, max_x - 15, "[%d/%d]", selected_index + 1, task_count);
+        attroff(COLOR_PAIR(3));
+    }
 }
 
 void draw_debug_panel(void) {
@@ -173,15 +273,47 @@ void draw_ui(void) {
 /* ========== Input Handling ========== */
 
 void handle_input(int ch) {
+    int max_y;
+    max_y = getmaxy(stdscr);
+
+    /* Calculate visible lines for scrolling */
+    int header_lines = 2;
+    int footer_lines = 1;
+    int debug_lines = debug_mode ? 9 : 0;
+    int table_header_lines = 2;
+    int available_lines = max_y - header_lines - footer_lines - debug_lines - table_header_lines;
+
     switch(ch) {
+        case KEY_UP:
+            if (selected_index > 0) {
+                selected_index--;
+                /* Scroll up if selection moves above visible area */
+                if (selected_index < scroll_offset) {
+                    scroll_offset = selected_index;
+                }
+            }
+            break;
+
+        case KEY_DOWN:
+            if (selected_index < task_count - 1) {
+                selected_index++;
+                /* Scroll down if selection moves below visible area */
+                if (selected_index >= scroll_offset + available_lines) {
+                    scroll_offset = selected_index - available_lines + 1;
+                }
+            }
+            break;
+
         case 'q':
         case 'Q':
             running = 0;
             break;
+
         case 'd':
         case 'D':
             debug_mode = !debug_mode;
             break;
+
         case 'h':
         case 'H':
             /* TODO: Show help dialog */
@@ -225,6 +357,10 @@ int main(void) {
 
     signal(SIGWINCH, handle_sigwinch);
     init_ui();
+
+    /* Initialize with mock data */
+    /* TODO: Replace with actual /proc parsing */
+    generate_mock_data();
 
     while (running) {
         if (resize_pending) {
