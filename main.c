@@ -17,16 +17,7 @@
 #include <ctype.h>
 #include <string.h>
 
-/* ========== Data Structures ========== */
-
-typedef struct {
-    int pid;
-    int tid;
-    char command[32];
-    char state;  /* 'R' = Running, 'S' = Sleeping, 'D' = Disk sleep, 'Z' = Zombie, 'T' = Stopped */
-} TaskInfo;
-
-#define MAX_TASKS 1000
+#include "task_data.h"
 
 /* ========== Global State ========== */
 
@@ -124,48 +115,7 @@ int is_numeric(char* str) {
     return 1;
 }
 
-/* ========== Mock Data Generation ========== */
-/* TODO: Replace this with actual /proc parsing */
-
-void generate_mock_data(void) {
-    const char *mock_commands[] = {
-        "systemd", "kthreadd", "bash", "vim", "firefox",
-        "chrome", "docker", "nginx", "postgres", "python3",
-        "gcc", "make", "ssh", "sshd", "cron",
-        "dbus-daemon", "NetworkManager", "pulseaudio", "Xorg", "gnome-shell"
-    };
-    const char states[] = {'R', 'S', 'S', 'S', 'D', 'S', 'S', 'S', 'S', 'S'};
-    int num_commands = sizeof(mock_commands) / sizeof(mock_commands[0]);
-
-    task_count = 0;
-
-    /* Generate mock tasks */
-    for (int i = 0; i < 50 && task_count < MAX_TASKS; i++) {
-        int pid = 100 + i * 10;
-        int num_threads = 1 + (i % 4);  /* 1-4 threads per process */
-
-        for (int t = 0; t < num_threads && task_count < MAX_TASKS; t++) {
-            tasks[task_count].pid = pid;
-            tasks[task_count].tid = pid + t;
-            snprintf(tasks[task_count].command, sizeof(tasks[task_count].command),
-                    "%s", mock_commands[i % num_commands]);
-            tasks[task_count].state = states[task_count % 10];
-            task_count++;
-        }
-    }
-}
-
-
-const char* get_state_string(char state) {
-    switch(state) {
-        case 'R': return "Running";
-        case 'S': return "Sleeping";
-        case 'D': return "Disk sleep";
-        case 'Z': return "Zombie";
-        case 'T': return "Stopped";
-        default: return "Unknown";
-    }
-}
+/* ========== UI Helper Functions ========== */
 
 int get_state_color(char state) {
     switch(state) {
@@ -358,9 +308,8 @@ int main(void) {
     signal(SIGWINCH, handle_sigwinch);
     init_ui();
 
-    /* Initialize with mock data */
-    /* TODO: Replace with actual /proc parsing */
-    generate_mock_data();
+    /* Collect task data */
+    task_count = collect_task_data(tasks, MAX_TASKS);
 
     while (running) {
         if (resize_pending) {

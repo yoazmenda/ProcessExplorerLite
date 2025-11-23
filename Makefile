@@ -9,7 +9,7 @@ LDFLAGS = -lncurses
 TARGET = processexplorer
 
 # Source files
-SRCS = main.c
+SRCS = main.c task_data.c
 OBJS = $(SRCS:.c=.o)
 
 # Default target
