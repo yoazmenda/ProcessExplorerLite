@@ -108,7 +108,7 @@ void draw_footer(void) {
     max_y = getmaxy(stdscr);
 
     attron(COLOR_PAIR(2));
-    mvprintw(max_y - 1, 0, "Keys: [↑/↓]Navigate | [q]uit | [d]ebug | [h]elp");
+    mvprintw(max_y - 1, 0, "Keys: [Up/Down]Navigate | [q]uit | [d]ebug | [h]elp");
     attroff(COLOR_PAIR(2));
 }
 
