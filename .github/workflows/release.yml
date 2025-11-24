@@ -9,16 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build and Release
+  build-x86_64:
+    name: Build x86_64
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            cc: gcc
-          - arch: aarch64
-            cc: aarch64-linux-gnu-gcc
 
     steps:
       - name: Checkout code
@@ -28,20 +21,65 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libncurses5-dev libncursesw5-dev
-          if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
 
       - name: Build binary
         run: |
-          make CC=${{ matrix.cc }}
-          mv processexplorer processexplorer-${{ matrix.arch }}
+          make
+          mv processexplorer processexplorer-x86_64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: processexplorer-x86_64
+          path: processexplorer-x86_64
+
+  build-aarch64:
+    name: Build ARM64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build in ARM64 container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v $PWD:/work -w /work \
+            arm64v8/ubuntu:22.04 \
+            bash -c "apt-get update && apt-get install -y gcc make libncurses5-dev libncursesw5-dev && make"
+          mv processexplorer processexplorer-aarch64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: processexplorer-aarch64
+          path: processexplorer-aarch64
+
+  release:
+    name: Create Release
+    needs: [build-x86_64, build-aarch64]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: processexplorer-x86_64
+
+      - name: Download aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: processexplorer-aarch64
 
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files: processexplorer-${{ matrix.arch }}
+          files: |
+            processexplorer-x86_64
+            processexplorer-aarch64
           draft: false
           prerelease: false
         env:
