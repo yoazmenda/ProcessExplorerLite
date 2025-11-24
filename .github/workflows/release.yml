@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            cc: gcc
+          - arch: aarch64
+            cc: aarch64-linux-gnu-gcc
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libncurses5-dev libncursesw5-dev
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+      - name: Build binary
+        run: |
+          make CC=${{ matrix.cc }}
+          mv processexplorer processexplorer-${{ matrix.arch }}
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: processexplorer-${{ matrix.arch }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

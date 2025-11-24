@@ -1,33 +1,56 @@
 # ProcessExplorerLite
 
-An interactive Linux process explorer with a text-based user interface (TUI), similar to `top`.
+A lightweight, terminal-based process monitoring tool for Linux, similar to `top` but built from scratch as a learning project to explore systems programming concepts.
 
 ## Features
 
 - Interactive TUI using ncurses
-- Clean, beginner-friendly C code
-- Easy to build and extend
+- Real-time process monitoring
+- Responsive keyboard input with no delay
+- Color-coded display
+- Auto-refresh every 1 second
+- Signal handling for window resize (SIGWINCH)
 
-## Requirements
+## Installation
+
+### Quick Install
+
+Install the latest release for your architecture:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash
+```
+
+### Run Without Installing
+
+Try it out without installing to your system:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run
+```
+
+### Build From Source
+
+#### Requirements
 
 - GCC compiler
 - ncurses library
 
-To install ncurses on Ubuntu/Debian:
+On Ubuntu/Debian:
 ```bash
 sudo apt-get install libncurses5-dev libncursesw5-dev
 ```
 
-## Building
+#### Building
 
-Simply run:
 ```bash
+git clone https://github.com/yoazmenda/ProcessExplorerLite.git
+cd ProcessExplorerLite
 make
 ```
 
-## Running
+#### Running
 
-After building:
 ```bash
 ./processexplorer
 ```
@@ -41,30 +64,56 @@ make run
 
 - `q` - Quit the application
 - `r` - Force refresh
-- `h` - Help (TODO)
+- `h` - Help (coming soon)
+
+## Architecture
+
+The project demonstrates several systems programming concepts:
+
+- **I/O Multiplexing**: Uses `select()` for responsive input without blocking
+- **Signal Handling**: Implements SIGWINCH for instant window resize
+- **Process Information**: Reads from `/proc` filesystem
+- **Terminal Control**: Uses ncurses for TUI rendering
+
+### Code Structure
+
+```
+main.c       - Main application and TUI logic
+task_data.c  - Process data collection and management
+Makefile     - Build configuration
+```
 
 ## Development
 
-### Clean build artifacts
+### Clean Build
+
 ```bash
 make clean
 ```
 
-### Code Structure
+### Install System-wide (Optional)
 
-- `main.c` - Main application file with TUI logic
-- `Makefile` - Build configuration
+```bash
+sudo make install
+```
 
-### Extending the Application
+This installs to `/usr/local/bin/processexplorer`.
 
-The code is structured with clear sections:
-1. **UI Initialization** (`init_ui`) - Sets up ncurses
-2. **Drawing Functions** (`draw_header`, `draw_footer`) - Render UI components
-3. **Input Handling** (`handle_input`) - Process keyboard input
-4. **Main Loop** - Coordinates updates and rendering
+### Uninstall
 
-Add your process monitoring logic in the main loop where indicated by TODO comments.
+```bash
+sudo make uninstall
+```
+
+## Supported Platforms
+
+- Linux x86_64
+- Linux ARM64 (aarch64)
 
 ## License
 
-Free to use and modify.
+MIT License - Free to use and modify.
+
+## Contributing
+
+This is a personal learning project, but feel free to fork and experiment!
