@@ -22,9 +22,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libncurses5-dev libncursesw5-dev
 
-      - name: Build binary
+      - name: Build static binary
         run: |
-          make
+          make static
           mv processexplorer processexplorer-x86_64
 
       - name: Upload artifact
@@ -44,12 +44,12 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Build in ARM64 container
+      - name: Build static ARM64 binary
         run: |
           docker run --rm --platform linux/arm64 \
             -v $PWD:/work -w /work \
             arm64v8/ubuntu:22.04 \
-            bash -c "apt-get update && apt-get install -y gcc make libncurses5-dev libncursesw5-dev && make"
+            bash -c "apt-get update && apt-get install -y gcc make libncurses5-dev libncursesw5-dev && make static"
           mv processexplorer processexplorer-aarch64
 
       - name: Upload artifact

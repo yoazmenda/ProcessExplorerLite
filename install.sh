@@ -42,6 +42,29 @@ get_latest_version() {
     curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
+# Check and install ncurses dependency
+ensure_dependencies() {
+    # Check if ncurses is already available
+    if ldconfig -p 2>/dev/null | grep -q libncurses.so; then
+        return 0
+    fi
+
+    echo "${YELLOW}Installing required dependencies...${NC}"
+
+    # Detect package manager and install ncurses
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1 || true
+        apt-get install -y -qq libncurses6 >/dev/null 2>&1 || apt-get install -y -qq libncurses5 >/dev/null 2>&1
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q ncurses-libs >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        apk add --no-cache ncurses-libs >/dev/null 2>&1
+    else
+        echo "${YELLOW}Warning: Could not install ncurses automatically${NC}"
+        echo "${YELLOW}Please install ncurses manually if the program fails to run${NC}"
+    fi
+}
+
 # Main installation function
 main() {
     echo "ProcessExplorerLite Installer"
@@ -80,6 +103,9 @@ main() {
 
     # Make executable
     chmod +x "$TMP_DIR/$BINARY_NAME"
+
+    # Ensure dependencies are installed
+    ensure_dependencies
 
     if [ "$RUN_ONLY" = true ]; then
         # Run directly without installing
