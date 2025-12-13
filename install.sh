@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -21,7 +21,7 @@ fi
 
 # Detect architecture
 detect_arch() {
-    local arch=$(uname -m)
+    arch=$(uname -m)
     case $arch in
         x86_64)
             echo "x86_64"
