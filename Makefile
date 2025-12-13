@@ -1,10 +1,27 @@
 # Makefile for ProcessExplorerLite
 
+# Detect OS
+UNAME_S := $(shell uname -s)
+
 # Compiler and flags
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -pedantic
 LDFLAGS = -lncurses
-STATIC_LDFLAGS = -static -lncurses -ltinfo
+
+# Platform-specific static linking
+ifeq ($(UNAME_S),Darwin)
+    # macOS: Use Homebrew ncurses for static linking
+    # Homebrew path differs between ARM and Intel Macs
+    HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo /usr/local)
+    NCURSES_PREFIX := $(HOMEBREW_PREFIX)/opt/ncurses
+    STATIC_CFLAGS = -I$(NCURSES_PREFIX)/include
+    # Force static linking by explicitly using the .a file
+    STATIC_LDFLAGS = $(NCURSES_PREFIX)/lib/libncurses.a
+else
+    # Linux: Full static linking
+    STATIC_CFLAGS =
+    STATIC_LDFLAGS = -static -lncurses -ltinfo
+endif
 
 # Target executable
 TARGET = processexplorer
@@ -22,7 +39,8 @@ $(TARGET): $(OBJS)
 	@echo "Build complete! Run with: ./$(TARGET)"
 
 # Build static executable for release
-static: $(OBJS)
+static: clean
+	$(CC) $(CFLAGS) $(STATIC_CFLAGS) -c $(SRCS)
 	$(CC) $(OBJS) -o $(TARGET) $(STATIC_LDFLAGS)
 	@echo "Static build complete! Run with: ./$(TARGET)"
 

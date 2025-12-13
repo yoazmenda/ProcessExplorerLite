@@ -1,137 +1,70 @@
 # ProcessExplorerLite
 
-A lightweight, terminal-based process monitoring tool for Linux, similar to `top` but built from scratch as a learning project to explore systems programming concepts.
+A lightweight, terminal-based process monitoring tool for Linux and macOS. Similar to `top`, built from scratch as a learning project.
 
-## Features
-
-- Interactive TUI using ncurses
-- Real-time process monitoring
-- Responsive keyboard input with no delay
-- Color-coded display
-- Auto-refresh every 1 second
-- Signal handling for window resize (SIGWINCH)
-
-## Installation
-
-### Quick Install
-
-Install the latest release for your architecture:
+## Quick Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash
 ```
 
-### Run Without Installing
-
-Try it out without installing to your system:
-
+Then run:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run
+processexplorer
 ```
 
-### Container/Docker Usage
+## What It Does
 
-Perfect for debugging containers with a single command. Works in any Linux container without requiring dependencies:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run
-```
-
-The installer automatically:
-- Detects your architecture (x86_64 or ARM64)
-- Downloads the appropriate static binary (no dependencies needed)
-- Runs immediately with no installation required
-
-Example in a Docker container:
-```bash
-docker exec -it <container-name> bash -c "curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run"
-```
-
-### Build From Source
-
-#### Requirements
-
-- GCC compiler
-- ncurses library
-
-On Ubuntu/Debian:
-```bash
-sudo apt-get install libncurses5-dev libncursesw5-dev
-```
-
-#### Building
-
-```bash
-git clone https://github.com/yoazmenda/ProcessExplorerLite.git
-cd ProcessExplorerLite
-make
-```
-
-#### Running
-
-```bash
-./processexplorer
-```
-
-Or build and run in one command:
-```bash
-make run
-```
+- Real-time process monitoring with color-coded display
+- Interactive TUI using ncurses
+- Auto-refresh every 1 second
+- Responsive keyboard controls
 
 ## Keyboard Controls
 
-- `q` - Quit the application
+- `q` - Quit
 - `r` - Force refresh
-- `h` - Help (coming soon)
-
-## Architecture
-
-The project demonstrates several systems programming concepts:
-
-- **I/O Multiplexing**: Uses `select()` for responsive input without blocking
-- **Signal Handling**: Implements SIGWINCH for instant window resize
-- **Process Information**: Reads from `/proc` filesystem
-- **Terminal Control**: Uses ncurses for TUI rendering
-
-### Code Structure
-
-```
-main.c       - Main application and TUI logic
-task_data.c  - Process data collection and management
-Makefile     - Build configuration
-```
-
-## Development
-
-### Clean Build
-
-```bash
-make clean
-```
-
-### Install System-wide (Optional)
-
-```bash
-sudo make install
-```
-
-This installs to `/usr/local/bin/processexplorer`.
-
-### Uninstall
-
-```bash
-sudo make uninstall
-```
 
 ## Supported Platforms
 
 - Linux x86_64
-- Linux ARM64 (aarch64)
+- Linux ARM64
+- macOS x86_64 (Intel)
+- macOS ARM64 (Apple Silicon)
+
+## Build From Source
+
+**Requirements:**
+- GCC compiler
+- ncurses library
+
+**On Ubuntu/Debian:**
+```bash
+sudo apt-get install libncurses5-dev libncursesw5-dev
+```
+
+**On macOS:**
+```bash
+brew install ncurses
+```
+
+**Build:**
+```bash
+git clone https://github.com/yoazmenda/ProcessExplorerLite.git
+cd ProcessExplorerLite
+make
+./processexplorer
+```
+
+## Development
+
+```bash
+make clean          # Clean build artifacts
+make static         # Build static binary for release
+sudo make install   # Install to /usr/local/bin
+sudo make uninstall # Uninstall
+```
 
 ## License
 
 MIT License - Free to use and modify.
-
-## Contributing
-
-This is a personal learning project, but feel free to fork and experiment!

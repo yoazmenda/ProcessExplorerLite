@@ -13,11 +13,23 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Parse arguments
-RUN_ONLY=false
-if [ "$1" = "--run" ]; then
-    RUN_ONLY=true
-fi
+# Detect OS
+detect_os() {
+    os=$(uname -s)
+    case $os in
+        Linux)
+            echo "linux"
+            ;;
+        Darwin)
+            echo "darwin"
+            ;;
+        *)
+            echo "${RED}Error: Unsupported OS: $os${NC}" >&2
+            echo "Supported OS: Linux, macOS (Darwin)" >&2
+            exit 1
+            ;;
+    esac
+}
 
 # Detect architecture
 detect_arch() {
@@ -44,7 +56,12 @@ get_latest_version() {
 
 # Check and install ncurses dependency
 ensure_dependencies() {
-    # Check if ncurses is already available
+    # macOS has ncurses built-in, no need to install
+    if [ "$(uname -s)" = "Darwin" ]; then
+        return 0
+    fi
+
+    # Check if ncurses is already available (Linux only)
     if ldconfig -p 2>/dev/null | grep -q libncurses.so; then
         return 0
     fi
@@ -71,9 +88,10 @@ main() {
     echo "============================="
     echo
 
-    # Detect architecture
+    # Detect OS and architecture
+    OS=$(detect_os)
     ARCH=$(detect_arch)
-    echo "Detected architecture: $ARCH"
+    echo "Detected platform: $OS-$ARCH"
 
     # Get latest version
     echo "Fetching latest release..."
@@ -87,14 +105,14 @@ main() {
     echo "Latest version: $VERSION"
 
     # Construct download URL
-    DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$BINARY_NAME-$ARCH"
+    DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$BINARY_NAME-$OS-$ARCH"
 
     # Create temporary directory
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
 
     # Download binary
-    echo "Downloading $BINARY_NAME-$ARCH..."
+    echo "Downloading $BINARY_NAME-$OS-$ARCH..."
     if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$BINARY_NAME"; then
         echo "${RED}Error: Failed to download binary${NC}" >&2
         echo "URL: $DOWNLOAD_URL" >&2
@@ -107,26 +125,19 @@ main() {
     # Ensure dependencies are installed
     ensure_dependencies
 
-    if [ "$RUN_ONLY" = true ]; then
-        # Run directly without installing
-        echo "${GREEN}Running $BINARY_NAME...${NC}"
-        exec "$TMP_DIR/$BINARY_NAME"
+    # Install to system
+    echo "Installing to $INSTALL_DIR/$BINARY_NAME..."
+
+    if [ -w "$INSTALL_DIR" ]; then
+        mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
     else
-        # Install to system
-        echo "Installing to $INSTALL_DIR/$BINARY_NAME..."
-
-        if [ -w "$INSTALL_DIR" ]; then
-            mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-        else
-            echo "${YELLOW}Note: Installing to $INSTALL_DIR requires sudo${NC}"
-            sudo mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-        fi
-
-        echo "${GREEN}Installation complete!${NC}"
-        echo
-        echo "Run with: $BINARY_NAME"
-        echo "Or: $INSTALL_DIR/$BINARY_NAME"
+        echo "${YELLOW}Note: Installing to $INSTALL_DIR requires sudo${NC}"
+        sudo mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
     fi
+
+    echo "${GREEN}Installation complete!${NC}"
+    echo
+    echo "Run with: $BINARY_NAME"
 }
 
 main
