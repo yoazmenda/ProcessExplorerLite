@@ -29,6 +29,24 @@ Try it out without installing to your system:
 curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run
 ```
 
+### Container/Docker Usage
+
+Perfect for debugging containers with a single command. Works in any Linux container without requiring dependencies:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run
+```
+
+The installer automatically:
+- Detects your architecture (x86_64 or ARM64)
+- Downloads the appropriate static binary (no dependencies needed)
+- Runs immediately with no installation required
+
+Example in a Docker container:
+```bash
+docker exec -it <container-name> bash -c "curl -fsSL https://raw.githubusercontent.com/yoazmenda/ProcessExplorerLite/master/install.sh | bash -s -- --run"
+```
+
 ### Build From Source
 
 #### Requirements
